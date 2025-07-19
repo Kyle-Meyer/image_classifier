@@ -1,0 +1,85 @@
+===================================================================================
+                                      Question 1
+===================================================================================
+
+Histogram analysis is one of the most widely used methods to extract statistical information ofan image. 
+List and explain five statistical features that can be obtained from a histogram?Provide the formulation of each of those statistical features
+
+There are a couple of methods that can be used to extract statsitical information from an image 
+
+  1. Mean - the average intensity level of the image and indicates overall brightness.
+    - Formulation: μ = Σ(i × h(i)) / N 
+      - i = intensity level (0 to L-1)
+      - h(i) = number of pixels at intensity level i
+      - N = total number of pixels in the image
+
+  2. Variance (Second Central Moment) - the spread of intensity values around the mean, indicating contrast levels in the image.
+    - Formulation: σ² = Σ((i - μ)² × h(i)) / N
+      - μ = mean intensity
+      - Standard deviation σ = √σ² 
+
+  3. Skewness (Third Central Moment) - measures the asymmetry of the histogram distribution, indicating whether the image is predominantly dark or bright.
+    - Formulation: Skewness = Σ((i - μ)³ × h(i)) / (N × σ³)
+      - i = Intensity level (grayscale value ranging from 0 to L-1, where L is typically 256 for 8-bit images)
+      - μ = Mean intensity value of the image (calculated as shown in feature 1)
+      - h(i) = Histogram count - number of pixels that have intensity level i 
+      - N = Total number of pixels in the image
+      - σ = Standard deviation (square root of variance)
+
+  4. Kurtosis (Fourth Central Moment) - measures the "peakedness" or flatness of the histogram distribution, indicating how concentrated the intensity values are.
+    -Formulation: Kurtosis = Σ((i - μ)⁴ × h(i)) / (N × σ⁴) - 3
+      - i = Intensity level (0 to L-1)
+      - μ =  Mean intensity value
+      - h(i) = Number of pixels at intensity level i
+      - N = Total number of pixels
+      - σ = Standard deviation
+      - -3 = Excess kurtosis adjustment (makes normal distribution have kurtosis = 0)
+
+  5. Entropy - measures the randomness or information content in the image, indicating texture complexity.
+    - Formulation: Entropy = -Σ(p(i) × log₂(p(i)))
+      - i = Intensity level (0 to L-1)
+      - p(i) = Probability of intensity level i, calculated as p(i) = h(i)/N
+      - h(i) = Histogram count at intensity level i
+      - N = Total number of pixels
+
+
+===================================================================================
+                                      Question 2
+===================================================================================
+
+List and explain three methods that can be used to capture color properties of an image.
+
+  1. Color Histograms - represent the distribution of colors in an image by counting the frequency of occurrence of each color or color range.
+    - For RGB images, we create a separate histogram for each color chanel, Red, Green, and Blue. Other channels can be used like HSV, or LAB
+    each bin represents a color value or range of values, and the heigh of each bin indicates how many pixels belong to each channel 
+
+  2. Color Moments - statistical measures that capture the color distribution using mathematical moments 
+    - typically we start with the first moment, the mean, to each color channel separately, this will capture the most dominant color tone or channel.
+    Then we take the second moment, the color spread, on each channel, this will measure how much each color varies from the average. Last we take the
+    third moment, color asymmetry, which measures whether the color distribution is skewed toward dark or bright values.
+
+  3. Color Coherence Vectors - enhance traditional color histograms by incorporating spatial information about the color distribution
+    - For each color histogram pixels are classified as either coherent or incoherent, a coherent pixel is part of a large connected region of similar
+    color. We then make two bins for the counts of incoherent and coherent pixels
+
+
+===================================================================================
+                                      Question 3
+===================================================================================
+
+List and explain three methods that can be used to capture shape properties of an image.
+
+  1. Contour Based Shape Descriptors - Contour based methods extract shape information from the boundary or perimeter of objects in the image 
+   - First we extract the object boundary or contour ege using edge detection and or segmentation, then we analyze contour points to derive shape
+   characteristics, lastly we classify the shape as Chain Codes, Fourier Descriptors, and Curvature analysis
+
+  2. Region Based Shape base descriptors - analyze the entire area or region of the shape rather than just the boundary. 
+    - Similar to Contour based shape descriptors, but now we can use 
+      - Geometric moments - Mathematical moments calculated over the entire shape region
+      - Hu moments - Seven invariant moments derived from central moments
+      - Shape Compactness - Compactness = (Perimeter²)/(4π × Area)
+
+  3. Structural Shape Descriptors - represent shapes as combinations of simpler geometric primitives or analyze the skeleton/medial axis of shapes.
+    - Skeleton/Medial Axis Transform - Extract the "skeleton" of the shape - the set of points equidistant from the nearest boundary points
+    - Shape Decomposition - Break complex shapes into simpler components (rectangles, ellipses, circles) Analyze relationships between components
+    - Distance Transform - For each interior point, calculate distance to nearest boundary creates a distance map of the shape interior
