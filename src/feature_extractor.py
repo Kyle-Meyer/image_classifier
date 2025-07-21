@@ -78,40 +78,121 @@ class FeatureExtractor:
 
         return tFeatureVector
 
-    def extractPerceptualHash(self, aImage:np.ndarray, aHashSize:int = 8) -> Optional[str]:
+    def getColorFeatures(self, aImage: np.ndarray) -> List[float]:
         if aImage is None:
-            return None 
+            return [0.0] * 8
+
+        #our buildable return 
+        tFeatures = []
+
+        #lets first get the mean of R, G, B 
+        if len(aImage.shape) == 3:
+            tMeanB, tMeanG, tMeanR = cv2.mean(aImage)[:3] #ignore the alpha channel 
+            tFeatures.extend([tMeanR, tMeanG, tMeanB])
+        else:
+            tMeanGray = cv2.mean(aImage)[0] # must just be a gray image at this point, so take the first channel 
+            tFeatures.extend([tMeanGray, tMeanGray, tMeanGray])
+
+        # Now get dominant color ala HSV style 
+        if len(aImage.shape) == 3:
+            tHsvImage = cv2.cvtColor(aImage, cv2.COLOR_BGR2GRAY)
+            #get histograms 
+            #calcHist(images, chanels, mask, histSize, ranges)
+            tHHist = cv2.calcHist([tHsvImage], [0], None, [32], [0, 180]) #Hue is in range 0-180 on the 0 channel 
+            tSHist = cv2.calcHist([tHsvImage], [1], None, [32], [0, 256]) #saturation is in range 0-256 on 1 channel 
+            tVHist = cv2.calcHist([tHsvImage], [2], None, [32], [0, 256]) #value is in range 0-256 on 2 channel
+
+            #get the largest elements in these arrays 
+            tDomHue = np.argmax(tHHist) * (180.0 / 32) #convert this back to the hue range
+            tDomSat = np.argmax(tSHist) * (256.0 / 32) #convert back to the saturation range 
+            tDomVal = np.argmax(tVHist) * (256.0 / 32) #convert back to the value range 
+
+            tFeatures.extend([tDomHue, tDomSat, tDomVal])
+
+        else:
+            #grayscale 
+            tFeatures.extend([0.0, 0.0, cv2.mean(aImage)[0]])
+
+        #lastly get color histogram stats 
+        tColorHist = self.extractColorHistogram(aImage, aBins=32)
+
+        if tColorHist is not None:
+            tHistEntropy = -np.sum(tColorHist * np.log(tColorHist + 1e-10))
+
+            tHistStd = np.std(tColorHist)
+
+            tFeatures.extend([tHistEntropy, tHistStd])
+        else:
+            tFeatures.extend([0.0, 0.0])
+
+        return tFeatures
+
+    def getTextureFeatures(self, aImage: np.ndarray) -> List[float]:
+        if aImage is None:
+            return [0.0] * 8
+
+        tFeatures = []
 
         if len(aImage.shape) == 3:
             tGrayImage = cv2.cvtColor(aImage, cv2.COLOR_BGR2GRAY)
         else:
             tGrayImage = aImage 
-        #resize to hash size
-        tResized = cv2.resize(tGrayImage, (aHashSize, aHashSize), interpolation=cv2.INTER_CUBIC)
 
-        #apply discrete cosine transform
-        tDCT = cv2.dct(np.float32(tResized))
+        #ORB based texture features 
+        try:
+            tOrbKeypoints, tOrbDescriptors = self.extractORBFeatures(aImage)
 
-        #extrac top left 8x8 for low frequencies 
-        tDCTLowFreq = tDCT[:aHashSize//2, :aHashSize//2]
+            if tOrbKeypoints is not None and len(tOrbKeypoints) > 0:
+                #key point density per 1000 pixels
+                tImageArea = tGrayImage.shape[0] * tGrayImage.shape[1]
+                tKeypointDensity = (len(tOrbKeypoints) / tImageArea) * 1000
 
-        tMedian = np.median(tDCTLowFreq)
+                #mean keypoint strength of features
+                tMeanResponse = np.mean(tOrbKeypoints[:, 3]) #4th column is response
+                
+                #response standard deviation
+                tResponseStd = np.std(tOrbKeypoints[:, 3])
 
-        tBinaryHash = tDCTLowFreq > tMedian
+                tMeanAngleVariation = np.mean(np.abs(tOrbKeypoints[:, 2])) #3rd column is angle 
 
-        #convert to hex string
-        tHashValue = 0
-        for i, row, in enumerate(tBinaryHash.flatten()):
-            if row:
-                tHashValue |= (1 << i) #if this cell is true set the i'th bit to 1, :]
+                tFeatures.extend([tKeypointDensity, tMeanResponse, tResponseStd, tMeanAngleVariation])
+            else:
+                tFeatures.extend([0.0, 0.0, 0.0, 0.0])
 
-        tHexHash = format(tHashValue, 'x').zfill(aHashSize)
+        except Exception as tError:
+            print(f"Error extracting ORB features {tError}")
+            tFeatures.extend([0.0, 0.0, 0.0, 0.0])
 
-        self.mCurrentFeatures = tHexHash
-        self.mFeatureType = "PERCEPTUAL_HASH"
+        #SIFT features 
+        try: 
+            tSiftKeypoints, tSiftDescriptors = self.extractSIFTFeatures(aImage)
 
-        return tHexHash
+            if tSiftKeypoints is not None and len(tSiftKeypoints) > 0:
+                #density again by 1000 pixels 
+                tSiftDensity = (len(tSiftKeypoints) / tImageArea) * 1000
 
+                tSiftMeanResponse = np.mean(tSiftKeypoints[:, 3])
+
+                tMeanKeypointSize = np.mean(tSiftKeypoints[:, 4]) # 5th column is size 
+
+                if tSiftDescriptors is not None:
+                    #mean of all descriptor valus
+                    tDescriptorMean = np.mean(tSiftDescriptors)
+                else:
+                    tDescriptorMean = 0.0 
+
+                tFeatures.extend([tSiftDensity, tSiftMeanResponse, tMeanKeypointSize, tDescriptorMean])
+            else:
+                #no sift keypoints found 
+                tFeatures.extend([0.0, 0.0, 0.0, 0.0])
+
+        except Exception as tError:
+            print(f"error extracting SIFT features: {tError}")
+            tFeatures.extend([0.0, 0.0, 0.0, 0.0])
+
+        return tFeatures
+
+    
     def getFeatureSummary(self) -> Dict[str, any]:
         if self.mCurrentFeatures is None: 
             return {"type": None, "count": 0, "shape": None}
