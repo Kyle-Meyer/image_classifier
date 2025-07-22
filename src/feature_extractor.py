@@ -192,7 +192,121 @@ class FeatureExtractor:
 
         return tFeatures
 
+    def getShapeFeatures(self, aImage: np.ndarray) -> List[float]:
+        if aImage is None:
+            return [0.0] * 6
+        tFeatures = []
+
+        if len(aImage.shape) == 3:
+            tGrayImage = cv2.cvtColor(aImage, cv2.COLOR_BGR2GRAY)
+        else:
+            tGrayImage = aImage 
+
+        #get edge density 
+        try: 
+            tEdges = cv2.Canny(tGrayImage, 50, 150) #built in canny edge detection provided by cv2 
+            tTotalPixels = tGrayImage.shape[0] * tGrayImage.shape[1]
+            tEdgePixels = np.sum(tEdges > 0)
+            tEdgeDensity = tEdgePixels / tTotalPixels
+            tFeatures.append(tEdgeDensity)
+        except Exception as tError:
+            print(f"Error calculating edge density: {tError}")
+            tFeatures.append(0.0) 
+
+        #contour based shape features 
+        try:
+            tContours, _ = cv2.findContours(tEdges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            if tContours:
+                # get the largest contour 
+                tLargestContours = max(tContours, key=cv2.contourArea)
+
+                #normalized contour area 
+                tContourArea = cv2.contourArea(tLargestContours)
+                tNormalizedArea = tContourArea / tTotalPixels
+
+                #normalized perimeter
+                tPerimeter = cv2.arcLength(tLargestContours)
+                tNormalizedPerimeter = tPerimeter / (tGrayImage.shape[0] + tGrayImage.shape[1])
+
+                #solidity 
+                tHull = cv2.convexHull(tLargestContours)
+                tHullArea = cv2.contourArea(tHull)
+                tSolidity = tContourArea / tHullArea if tHullArea > 0 else 0.0 
+                
+                tFeatures.extend([tNormalizedArea, tNormalizedPerimeter, tSolidity])
+            else:
+                tFeatures.extend([0.0, 0.0, 0.0])
+
+        except Exception as tError:
+            print(f"Error Calculating features: {tError}")
+            features.extend([0.0, 0.0, 0.0])
+
+        #hu moments
+        try:
+            tMoments = cv2.moments(tGrayImage)
+
+            tHuMoments = cv2.HuMoments(tMoments).flatten()
+
+            tHu1 = -np.sign(tHuMoments[0]) * np.log10(np.abs(tHuMoments[0]) + 1e-10)
+            tHu2 = -np.sign(tHuMoments[1]) * np.log10(np.abs(tHuMoments[1]) + 1e-10)
+
+            tFeatures.extend([tHu1, tHu2])
+
+        except Exception as tError:
+            print(f"Error calculating hu moments: {tError}")
+            tFeatures.extend([0.0, 0.0])
+
+        return tFeatures
+
+    def getStatisticalFeatures(self, aImage: np.ndarray) -> List[float]:
+        if aImage is None:
+            return [0.0] * 3
+
+        tFeatures = [] 
+
+        if len(aImage.shape) == 3:
+            tGrayImage = cv2.cvtColor(aImage, cv2.COLOR_BGR2GRAY)
+        else:
+            tGrayImage = aImage 
+
+        try:
+            tMeanBrightness = np.mean(tGrayImage)
+
+            tStdBrightness = np.std(tGrayImage)
+
+            tHist = cv2.calcHist([tGrayImage], [0], None, [256], [0, 256])
+            tHistNormalized = tHist / (tHist.sum() + 1e-10)
+            tEntropy = -np.sum(tHistNormalized * np.log2(tHistNormalized + 1e-10))
+
+            tFeatures.extend([tMeanBrightness, tStdBrightness, tEntropy])
+
+        except Exception as tError:
+            print(f"Error calculating stat features: {tError}")
+            tFeatures.extend([0.0, 0.0, 0.0])
+
+        return tFeatures
+
+    def extractAllFeatures(self, aImagePath: str) -> List[float]:
+        tImage = cv2.imread(aImagePath)
+        if tImage is None:
+            print(f"Error: could not load image {aImagePath}")
+            return [0.0] * 25 
+
+        tAllFeatures = []
+
+        tColorFeatures = self.getColorFeatures(tImage)
+        tTextureFeatures = self.getTextureFeatures(tImage)
+        tShapeFeatures = self.getShapeFeatures(tImage)
+        tStatFeatures = self.getStatisticalFeatures(tImage)
     
+        tAllFeatures.extend(tColorFeatures)     #8 features
+        tAllFeatures.extend(tTextureFeatures)   #8 features 
+        tAllFeatures.extend(tShapeFeatures)     #6 features 
+        tAllFeatures.extend(tStatFeatures)      #3 features 
+
+        return tAllFeatures
+
     def getFeatureSummary(self) -> Dict[str, any]:
         if self.mCurrentFeatures is None: 
             return {"type": None, "count": 0, "shape": None}
@@ -247,4 +361,13 @@ class FeatureExtractor:
             print(f"Error loading features: {tError}")
             return False
 
+    def extractFeaturesForCSV(self, aImagePath: str) -> str:
+        import os
 
+        tImageName = os.path.basename(aImagePath)
+        tFeatures = self.extractAllFeatures(aImagePath)
+
+        tFeatureStrings = [str(f) for f in tFeatures]
+        tCsvLine = f"{tImageName},{','.join(tFeatureStrings)}"
+
+        return tCsvLine
