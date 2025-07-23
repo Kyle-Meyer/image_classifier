@@ -95,7 +95,7 @@ class FeatureExtractor:
 
         # Now get dominant color ala HSV style 
         if len(aImage.shape) == 3:
-            tHsvImage = cv2.cvtColor(aImage, cv2.COLOR_BGR2GRAY)
+            tHsvImage = cv2.cvtColor(aImage, cv2.COLOR_BGR2HSV)
             #get histograms 
             #calcHist(images, chanels, mask, histSize, ranges)
             tHHist = cv2.calcHist([tHsvImage], [0], None, [32], [0, 180]) #Hue is in range 0-180 on the 0 channel 
@@ -226,7 +226,7 @@ class FeatureExtractor:
                 tNormalizedArea = tContourArea / tTotalPixels
 
                 #normalized perimeter
-                tPerimeter = cv2.arcLength(tLargestContours)
+                tPerimeter = cv2.arcLength(tLargestContours, True)
                 tNormalizedPerimeter = tPerimeter / (tGrayImage.shape[0] + tGrayImage.shape[1])
 
                 #solidity 
@@ -240,7 +240,7 @@ class FeatureExtractor:
 
         except Exception as tError:
             print(f"Error Calculating features: {tError}")
-            features.extend([0.0, 0.0, 0.0])
+            tFeatures.extend([0.0, 0.0, 0.0])
 
         #hu moments
         try:
